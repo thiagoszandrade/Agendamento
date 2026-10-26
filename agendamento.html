@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agendamento de equipamentos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef3f6;--card:#fff;--ink:#14263a;--mute:#5a6b7b;--line:#d3dde5;--brand:#0b6e99;--ok:#1b7f45;--okbg:#e2f3e9;--warn:#b4410c;--warnbg:#fde9dd;--zero:#e6e9ec}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1a24;--card:#17252f;--ink:#e6eef4;--mute:#93a5b4;--line:#2a3b48;--brand:#4cb3e0;--ok:#6fd49b;--okbg:#17362a;--warn:#ff9c6b;--warnbg:#3b2418;--zero:#22313c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Atkinson Hyperlegible",system-ui,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.6rem;margin:8px 0 4px}h2{font-size:1.1rem;margin:0 0 12px}
+.sub{color:var(--mute);margin:0 0 20px}
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+label{display:block;font-weight:700;font-size:.9rem;margin:12px 0 4px}
+input,select{width:100%;padding:10px;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px}
+.grupo th{background:var(--zero);font-size:.95rem;padding:7px 8px}
+.grupo span{float:right;font-weight:400;color:var(--mute);margin-left:16px}
+button.sec{padding:3px 10px;font-size:.85rem}
+small.tag{background:var(--okbg);color:var(--ok);padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px}
+input[readonly]{background:var(--zero);cursor:not-allowed}
+:focus-visible{outline:3px solid var(--brand);outline-offset:1px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.aulas{display:flex;flex-wrap:wrap;gap:8px}
+.aulas label{display:flex;align-items:center;gap:6px;margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-weight:400;cursor:pointer}
+.aulas input{width:auto}
+button{font:inherit;font-weight:700;border:0;border-radius:6px;padding:11px 16px;cursor:pointer;background:var(--brand);color:#fff}
+@media(prefers-color-scheme:dark){button.main{color:#06222f}}
+button.main{width:100%;margin-top:16px}
+button.sec{background:none;color:var(--warn);padding:4px 8px;border:1px solid var(--line)}
+button:disabled{opacity:.55;cursor:wait}
+#msg{margin-top:12px;padding:10px;border-radius:6px;display:none}
+#msg.ok{display:block;background:var(--okbg);color:var(--ok)}
+#msg.err{display:block;background:var(--warnbg);color:var(--warn)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+td.n{text-align:center;font-weight:700;border-radius:4px}
+td.n.ok{background:var(--okbg);color:var(--ok)}td.n.low{background:var(--warnbg);color:var(--warn)}td.n.zero{background:var(--zero);color:var(--mute)}
+.vazio{color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Agendamento de equipamentos</h1>
+  <p class="sub">Escolha o dia, as aulas e a quantidade. O sistema só confirma se houver equipamentos livres. Para cancelar uma reserva é preciso o PIN.</p>
+  <div class="grid">
+    <section>
+      <h2>Nova reserva</h2>
+      <label for="prof">Professor(a)</label><select id="prof"></select>
+      <div class="row">
+        <div><label for="sala">Sala</label><select id="sala"></select></div>
+        <div><label for="data">Dia</label><input type="date" id="data"></div>
+      </div>
+      <label>Aulas</label><div class="aulas" id="aulas"></div>
+      <label for="qtd">Quantidade de equipamentos</label>
+      <input id="qtd" readonly placeholder="Escolha a sala (1 por aluno)">
+      <button class="main" id="enviar">Reservar</button>
+      <div id="msg" role="status"></div>
+    </section>
+    <div>
+      <section>
+        <h2>Equipamentos livres neste dia</h2>
+        <div class="scroll"><table id="disp"></table></div>
+      </section>
+      <section>
+        <h2>Reservas do dia</h2>
+        <div class="scroll"><table id="lista"></table></div>
+        <p class="vazio" style="margin:8px 0 0;font-size:.85rem">“Liberar” desmarca uma reserva fixa só neste dia (pede PIN).</p>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+// 1) Cole aqui o endereço do seu app da web (Apps Script > Implantar)
+const API = "https://script.google.com/macros/s/AKfycbzMQzgG1EZFeajSs7YcIIL-UQ1pQ2cvxUtRaKWvjOTBgcVow2BZtjmsDTihOriPoutZ/exec";
+
+const PROFS = ["Alana","Camila","Dilermando","Elaine","Elen","Fernanda","Giovani","Ilma","Ione","Isabela","Joseane","Juliano","Karen","Ludmila","Luiz Fernando","Nelson","Regina","Samuel","Sérgio","Silvia","Simone","Valdirene"];
+const $ = id => document.getElementById(id);
+let estado = { aulas: [], estoque: 0, salas: {}, reservas: [] };
+
+function atualizarQtd() { $("qtd").value = estado.salas[$("sala").value] || ""; }
+
+const opts = (el, arr, ph) => el.innerHTML = (ph ? `<option value="">${ph}</option>` : "") + arr.map(v => `<option>${v}</option>`).join("");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function aviso(texto, tipo) { const m = $("msg"); m.className = tipo; m.textContent = texto; }
+
+function livres(aula) {
+  const usado = estado.reservas.filter(r => r.aula === aula).reduce((s, r) => s + r.qtd, 0);
+  return estado.estoque - usado;
+}
+
+function desenhar() {
+  if ($("sala").options.length <= 1) opts($("sala"), Object.keys(estado.salas), "Selecione…");
+  atualizarQtd();
+  if (!$("aulas").children.length) {
+    $("aulas").innerHTML = estado.aulas.map((a, i) => `<label><input type="checkbox" value="${i}"> ${esc(a.split(" (")[0])}</label>`).join("");
+  }
+  $("disp").innerHTML = `<tr><th>Aula</th><th>Livres (de ${estado.estoque})</th></tr>` +
+    estado.aulas.map(a => {
+      const n = livres(a), cls = n <= 0 ? "zero" : n <= estado.estoque * 0.2 ? "low" : "ok";
+      return `<tr><td>${esc(a)}</td><td class="n ${cls}">${Math.max(n, 0)}</td></tr>`;
+    }).join("");
+  const hora = a => ((a.match(/(\d{1,2}:\d{2})/) || ["", ""])[1]).replace(/^0/, "");
+  const nomeAula = a => a.split(" (")[0];
+  $("lista").innerHTML = "<tr><th>Sala</th><th>Professor(a)</th><th>Qtd</th><th></th></tr>" +
+    estado.aulas.map(a => {
+      const rs = estado.reservas.filter(r => r.aula === a).sort((x, y) => x.sala.localeCompare(y.sala, "pt", { numeric: true }));
+      const total = rs.reduce((t, r) => t + r.qtd, 0);
+      const resumo = rs.length ? rs.length + " reserva(s) · " + total + " equip." : "livre";
+      return `<tr class="grupo"><th colspan="4">${esc(hora(a))} · ${esc(nomeAula(a))}<span>${resumo}</span></th></tr>` +
+        rs.map(r => `<tr><td><b>${esc(r.sala)}</b></td><td>${esc(r.professor)}${r.fixa ? ' <small class="tag">fixa</small>' : ""}</td><td>${r.qtd}</td><td><button class="sec" data-id="${esc(r.id)}" title="${r.fixa ? "Liberar somente neste dia" : "Cancelar reserva"}">${r.fixa ? "Liberar" : "Cancelar"}</button></td></tr>`).join("");
+    }).join("");
+}
+
+async function carregar() {
+  if (!$("data").value) return;
+  try {
+    const r = await fetch(API + "?data=" + $("data").value);
+    estado = await r.json();
+    desenhar();
+  } catch (e) { aviso("Não foi possível carregar os dados. Verifique a URL do Apps Script.", "err"); }
+}
+
+async function enviar(corpo) {
+  // text/plain evita pré-verificação CORS no Apps Script
+  const r = await fetch(API, { method: "POST", body: JSON.stringify(corpo) });
+  return r.json();
+}
+
+$("enviar").onclick = async () => {
+  const aulas = [...document.querySelectorAll("#aulas input:checked")].map(i => +i.value);
+  const corpo = { action: "reservar", professor: $("prof").value, sala: $("sala").value, data: $("data").value, aulas };
+  if (!corpo.professor || !corpo.sala) return aviso("Escolha o professor e a sala.", "err");
+  $("enviar").disabled = true;
+  try {
+    const res = await enviar(corpo);
+    aviso(res.ok ? "Reserva confirmada!" : res.erro, res.ok ? "ok" : "err");
+    await carregar();
+  } catch (e) { aviso("Falha de conexão. Tente novamente.", "err"); }
+  $("enviar").disabled = false;
+};
+
+$("lista").onclick = async e => {
+  const id = e.target.dataset && e.target.dataset.id;
+  if (!id) return;
+  const fixa = id.indexOf("F|") === 0;
+  const pin = prompt(fixa ? "PIN para liberar esta reserva FIXA somente neste dia:" : "Digite o PIN para cancelar esta reserva:");
+  if (!pin) return;
+  e.target.disabled = true;
+  const res = await enviar({ action: "cancelar", id, pin, data: $("data").value });
+  aviso(res.ok ? (fixa ? "Reserva fixa liberada somente neste dia." : "Reserva cancelada.") : res.erro, res.ok ? "ok" : "err");
+  carregar();
+};
+
+opts($("prof"), PROFS, "Selecione…");
+$("sala").onchange = atualizarQtd;
+const hoje = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+$("data").value = hoje; $("data").min = hoje;
+$("data").onchange = carregar;
+carregar();
+</script>
+</body>
+</html>
